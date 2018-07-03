@@ -1,0 +1,12 @@
+Material,FlapFreq,FreqFx,FreqFy,FreqTz
+pink,0.5,10,6,10
+pink,1,12,12,18
+pink,1.5,24,19,20
+pink,2,35,27,23
+pink,2.5,67,34,29
+pink,3,75,39,37
+coral,0.5,10,6,6
+coral,1,19,14,13
+coral,1.5,29,20,21
+coral,2,40,25,23
+coral,2.5,67,30,29

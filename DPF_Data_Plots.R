@@ -1,9 +1,10 @@
 ########
+# Name: DPF_Data_Plots.R
 # Author: Zane Wolf
 # Date Created: 12/1/17
-# Purpose: To analyze duo pneufish data
+# Purpose: To analyze and plot duo pneufish data. Complements DPF_Stats_Analysis.R
 
-# Date Updated: 
+# Date Updated: 7/6/18
 
 ########
 
@@ -40,6 +41,11 @@ colnames(data_csv)
 
 data_csv <- as.data.frame(data_csv)
 
+########################################################################################################################
+
+#                                                DATA MANIPULATION 
+
+########################################################################################################################
 
 useless_cols <- names(data_csv) %in% c("Date", "RampTime", "Regulator A", "Regulator B","Biased")
 data_A <- data_csv[!useless_cols]
@@ -49,18 +55,19 @@ data_A$`Flow Speed (rpm)` <- mapvalues(data_A$`Flow Speed (rpm)`, from = c(0,50)
 
 data_A$`Maxpress` <- mapvalues(data_A$`Maxpress`, from = c(50, 75, 100), to=c(0.5, 0.75, 1.0))
 
-
-
 data_A <- data_A %>% mutate(freq = as.factor(`Frequency (Hz)`))
 data_A <- data_A %>% mutate(Frequency = as.factor(`Frequency (Hz)`))
 data_A <- data_A %>% mutate(minPress = as.factor(`Minpress Percentage`))
 data_A <- data_A %>% mutate(maxPress = as.factor(`Maxpress`))
 data_A <- data_A %>% mutate(flowSpeed = as.factor(`Flow Speed (rpm)`))
 
+#data_C is all data represented in mN 
 data_C <- data_A %>% mutate(ThrustmN=FxMean*1000)
+
+# data_500 is all data for StepTime == 500ms
 data_500 <- subset(data_C, StepTime==500)
 
-# Create data sets for summarized result variables 
+#Create data sets for summarized result variables 
 
 #Force_x
 data_Fx_mN <- data_500 %>% 
@@ -98,7 +105,8 @@ data_Fy_mN <- data_500 %>%
 Fx_fs_0 <- subset(data_Fx_mN,flowSpeed=='0 cm/s')
 Fx_fs_50 <- subset(data_Fx_mN, flowSpeed=='5.3 cm/s')
 
-# Set up amplitude data
+#Set up amplitude data
+
 data_amp_analysis <- subset(data_500, Height >=0)
 data_amp_analysis$`Foil Color`<-factor(data_amp_analysis$`Foil Color`, c("Black", "Yellow", "Orange"))
 
@@ -116,11 +124,48 @@ levels(data_amp_analysis$Frequency) <- c("0.25 Hz", "0.5 Hz", "0.75 Hz", "1.0 Hz
 
 ###########################################################################################################################
 
- #                                       FX GRAPHS
+ #                                                               FX GRAPHS
 
 ###########################################################################################################################
 
 
+#___________________________________________________
+
+#         MINIMUM PRESSURE RESULT GRAPHS
+#___________________________________________________
+
+
+#create different levels so that facet_wraps have units
+data_Fx_mN_A <- data_Fx_mN
+levels(data_Fx_mN_A$flowSpeed) <- c("0 cm/s", "5.3 cm/s")
+levels(data_Fx_mN_A$maxPress) <- c("0.5 kPa", "0.75 kPa", "1.0 kPa")
+
+# min press vs thrust, grouped by frequency, facet-grid for flow speed, max pressure, and foil color
+ggplot(data_Fx_mN_A, aes(x=minPress, y=mean, group=Frequency, colour=Frequency))+geom_point()+geom_line()+facet_grid(`Foil Color`~flowSpeed+maxPress)+geom_errorbar(aes(ymin=mean-se, ymax=mean+se)) + ylab("Net Thrust (mN)") + xlab("Minimum Pressure (%)")+scale_color_discrete(name="Frequency (Hz)")
+
+#reduced
+ggplot(data_Fx_mN, aes(x=minPress, y=mean, group=Frequency, color=Frequency))+facet_grid(flowSpeed~`Foil Color`)+geom_smooth(method=lm)+theme_bw(base_size=18)+xlab("Minimum Pressure (%)")+ylab("Net Thrust (mN)") + scale_color_discrete(name="Frequency (Hz)")
+
+#boxplot: minpress vs thrust for all data 
+ggplot(data_Fx_mN, aes(x=minPress, y=mean))+geom_boxplot()+theme_bw(base_size=18)+xlab("Minimum Pressure (%)")+ylab("Net Thrust (mN)")
+
+# ~~~~~~~~~~~~~~~~~~~~~ ! ~~~~~~~~~~~~~~~~~~~~~~~~~~#
+
+#boxplot: minpress vs thrust, wrapped by flow speed
+ggplot(data_Fx_mN, aes(x=minPress, y=mean))+geom_boxplot()+facet_wrap(~flowSpeed)+theme_bw(base_size=18)+xlab("Minimum Pressure (%)")+ylab("Net Thrust (mN)")
+
+# ~~~~~~~~~~~~~~~~~~~~~ ! ~~~~~~~~~~~~~~~~~~~~~~~~~~#
+
+# ggplot(data_Fx_mN, aes(x = minPress , y = mean, fill=as.factor(flowSpeed)))+facet_grid(`Foil Color`~maxPress+Frequency)+ geom_bar(stat='identity', position='dodge')+ylab("Thrust (mN)")+xlab("Frequency (hz)")+ labs(fill="Foil_Color")
+
+
+#___________________________________________________
+
+#         FREQUENCY PRESSURE RESULT GRAPHS
+#___________________________________________________
+
+
+#line graph: frequency vs net thrust, grouped by minPress, facet-grid for flow speed, maxPress, and foil - with smooth
 ggplot(data_Fx_mN, aes(x=Frequency, y=mean, group=minPress, colour=minPress))+geom_point()+facet_grid(`Foil Color`~maxPress+flowSpeed) +   
   geom_smooth(data=data_Fx_mN[data_Fx_mN$minPress=="0",],aes(x=Frequency, y=mean), method="lm", se=FALSE, color="green")+
   geom_smooth(data=data_Fx_mN[data_Fx_mN$minPress=="0.05",], aes(x=Frequency, y=mean), method="lm", se=FALSE, color="red")+
@@ -128,32 +173,57 @@ ggplot(data_Fx_mN, aes(x=Frequency, y=mean, group=minPress, colour=minPress))+ge
   geom_smooth(data=data_Fx_mN[data_Fx_mN$minPress=="0.25",], aes(x=Frequency, y=mean), method="lm", se=FALSE, color="purple")+xlab("Frequency (Hz)")+ ylab("Thrust (mN)")+scale_color_manual(values=c("0" = "green", "0.05"= "red", "0.1"= "blue","0.25"="purple" ))
 # theme(legend.position=c(0.93, 0.9), legend.title = element_blank())
 
-ggplot(data_Fx_mN, aes(x=Frequency, y=mean, group=minPress, colour=minPress))+geom_point()+facet_grid(`Foil Color`~maxPress+flowSpeed) +   
-  geom_smooth(data=data_Fx_mN[data_Fx_mN$minPress=="0",],aes(x=Frequency, y=mean), method="lm", se=FALSE, color="green")+
-  geom_smooth(data=data_Fx_mN[data_Fx_mN$minPress=="0.05",], aes(x=Frequency, y=mean), method="lm", se=FALSE, color="red")+
-  geom_smooth(data=data_Fx_mN[data_Fx_mN$minPress=="0.1",], aes(x=Frequency, y=mean), method="lm", se=FALSE, color="blue")+
-  geom_smooth(data=data_Fx_mN[data_Fx_mN$minPress=="0.25",], aes(x=Frequency, y=mean), method="lm", se=FALSE, color="purple")+xlab("Frequency (Hz)")+ ylab("Thrust (mN)")+scale_color_manual(values=c("0" = "green", "0.05"= "red", "0.1"= "blue","0.25"="purple" ))
-# theme(legend.position=c(0.93, 0.9), legend.title = element_blank())
+#line graph: frequency vs net thrust, grouped by minPress, facet-grid for flow speed, maxPress, and foil - with geom_line
+ggplot(data_Fx_mN_A, aes(x=Frequency, y=mean, group=minPress, colour=minPress))+geom_point()+facet_grid(`Foil Color`~maxPress+flowSpeed) + geom_line()+geom_errorbar(aes(ymin=mean-se, ymax=mean+se))+xlab("Frequency (Hz)")+ ylab("Net Thrust (mN)")+scale_color_discrete(name="Min. Pressure (%)") 
 
-ggplot(data_Fx_mN, aes(x=minPress, y=mean, group=Frequency, colour=Frequency))+geom_point()+facet_grid(`Foil Color`~maxPress+flowSpeed) +   
-  geom_smooth(data=data_Fx_mN[data_Fx_mN$Frequency==0.25,],aes(x=minPress, y=mean), method="lm", se=FALSE, color="green")+
-  geom_smooth(data=data_Fx_mN[data_Fx_mN$Frequency==0.5,], aes(x=minPress, y=mean), method="lm", se=FALSE, color="red")+
-  geom_smooth(data=data_Fx_mN[data_Fx_mN$Frequency==0.75,], aes(x=minPress, y=mean), method="lm", se=FALSE, color="blue")+
-  geom_smooth(data=data_Fx_mN[data_Fx_mN$Frequency==1,], aes(x=minPress, y=mean), method="lm", se=FALSE, color="purple")+xlab("Minimum Pressure (kPa)")+ ylab("Thrust (mN)")+scale_color_manual(values=c("0.25" = "green", "0.5"= "red", "0.75"= "blue","1"="purple" ))
+#^ without error bars
+ggplot(data_Fx_mN_A, aes(x=Frequency, y=mean, group=minPress, colour=minPress))+geom_point()+facet_grid(`Foil Color`~maxPress+flowSpeed) + geom_line()+xlab("Frequency (Hz)")+ ylab("Net Thrust (mN)")+scale_color_discrete(name="Min. Pressure (%)") 
+
+#boxplot graph: frequency vs Thrust, for all data
+ggplot(data_Fx_mN, aes(x=freq, y=mean))+geom_boxplot()+theme_bw(base_size=18)+xlab("Frequency (Hz)")+ylab("Net Thrust (mN)")
+
+# ~~~~~~~~~~~~~~~~~~~~~ ! ~~~~~~~~~~~~~~~~~~~~~~~~~~#
+
+#boxplot graph: frequency vs Thrust, for all data, grouped by foil 
+ggplot(data_Fx_mN, aes(x=freq, y=mean, fill=`Foil Color`))+geom_boxplot()+theme_bw(base_size=18)+xlab("Frequency (Hz)")+ylab("Net Thrust (mN)")+scale_fill_manual(values=c("Black" = "black", "Yellow"= "gold2", "Orange"= "darkorange2"))
+
+#line graph: frequency vs thrust, for data_Fx_mN_interaction, grouped by foil - with geom_line
+  #mN_interaction groups by 'Foil Color' and frequency only. MaxPress and MinPress and FlowSpeed are all obsorbed into the data
+ggplot(data_Fx_mN_interaction, aes(x=freq, y=mean, group=`Foil Color`, color=`Foil Color`))+geom_point(size=3)+geom_errorbar(aes(ymin=mean-se, ymax=mean+se), width=0.5)+theme_bw(base_size=18)+xlab("Frequency (Hz)")+ylab("Net Thrust (mN)")+scale_color_manual(values=c("Black" = "black", "Yellow"= "gold", "Orange"= "orange"))+geom_line()
 
 
-ggplot(data_amp_analysis, aes(x=Height, y=FxMean, colour=`Foil Color`))+geom_point()+facet_wrap(~Frequency)+
-  geom_smooth(data=data_amp_analysis[data_amp_analysis$`Foil Color`=="Black",],aes(x=Height, y=FxMean), method="lm", se=FALSE, color="black")+
-  geom_smooth(data=data_amp_analysis[data_amp_analysis$`Foil Color`=="Yellow",], aes(x=Height, y=FxMean),method="lm", se=FALSE, color="yellow")+
-  geom_smooth(data=data_amp_analysis[data_amp_analysis$`Foil Color`=="Orange",], aes(x=Height, y=FxMean), method="lm", se=FALSE, color="orange")+xlab("Peak to Peak Amplitude (cm)")+ ylab("Thrust (N)")+scale_color_manual(values=c("Black" = "black", "Yellow"= "yellow", "Orange"= "orange"))+theme(legend.position=c(0.93, 0.9), legend.title = element_blank())
+# ~~~~~~~~~~~~~~~~~~~~~ ! ~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
+
+
+
+#___________________________________________________
+
+#         MAXIMUM PRESSURE RESULT GRAPHS
+#___________________________________________________
+
+ggplot(data_Fx_mN, aes(x=maxPress, y=mean))+geom_boxplot(aes(fill=`Foil Color`))+facet_grid(Frequency~flowSpeed)+xlab("Maximum Pressure (kPa)")+ylab("Net Thrust (mN)")+scale_fill_manual(values=c("Black" = "black", "Yellow"= "gold", "Orange"= "orange"))+geom_line()
+
+ggplot(data_Fx_mN, aes(x=maxPress, y=mean))+geom_boxplot(aes(fill=`Foil Color`))+facet_grid(Frequency~flowSpeed)+xlab("Maximum Pressure (kPa)")+ylab("Net Thrust (mN)")+scale_fill_manual(values=c("Black" = "black", "Yellow"= "gold2", "Orange"= "darkorange2"))+geom_line()
+
+ggplot(data_Fx_mN_nominPress, aes(x=maxPress, y=mean, color=Frequency, group=Frequency))+facet_grid(flowSpeed~`Foil Color`)+geom_point()+geom_line()+geom_errorbar(aes(ymin=mean-se, ymax=mean+se), width=0.1)
+
+ggplot(data_Fx_mN_nominPress, aes(x=maxPress, y=mean, color=Frequency, group=Frequency))+facet_grid(flowSpeed~`Foil Color`)+geom_point()+geom_line(size=0.5)+geom_errorbar(aes(ymin=mean-se, ymax=mean+se), width=0.5)
 
 
 ggplot(data_Fx_mN_nominPress, aes(x=maxPress, y=mean, color=Frequency, group=Frequency))+facet_grid(flowSpeed~`Foil Color`)+geom_point()+geom_line()+geom_errorbar(aes(ymin=mean-se, ymax=mean+se), width=0.1)
 
 ggplot(data_Fx_mN_nominPress, aes(x=maxPress, y=mean, color=Frequency, group=Frequency))+facet_grid(flowSpeed~`Foil Color`)+geom_point()+geom_line(size=0.5)+geom_errorbar(aes(ymin=mean-se, ymax=mean+se), width=0.5)
 
-ggplot(data_Fx_mN, aes(x = minPress , y = mean, fill=as.factor(flowSpeed)))+facet_grid(`Foil Color`~maxPress+Frequency)+ geom_bar(stat='identity', position='dodge')+ylab("Thrust (mN)")+xlab("Frequency (hz)")+ labs(fill="Foil_Color")
+
+
+
+
+
+ggplot(data_amp_analysis, aes(x=Height, y=FxMean, colour=`Foil Color`))+geom_point()+facet_wrap(~Frequency)+
+  geom_smooth(data=data_amp_analysis[data_amp_analysis$`Foil Color`=="Black",],aes(x=Height, y=FxMean), method="lm", se=FALSE, color="black")+
+  geom_smooth(data=data_amp_analysis[data_amp_analysis$`Foil Color`=="Yellow",], aes(x=Height, y=FxMean),method="lm", se=FALSE, color="yellow")+
+  geom_smooth(data=data_amp_analysis[data_amp_analysis$`Foil Color`=="Orange",], aes(x=Height, y=FxMean), method="lm", se=FALSE, color="orange")+xlab("Peak to Peak Amplitude (cm)")+ ylab("Thrust (N)")+scale_color_manual(values=c("Black" = "black", "Yellow"= "yellow", "Orange"= "orange"))+theme(legend.position=c(0.93, 0.9), legend.title = element_blank())
 
 
 
@@ -173,14 +243,10 @@ ggplot(data_Fx_mN, aes(x=maxPress, y=mean))+geom_boxplot(aes(fill=`Foil Color`))
 
 #plot for result 3) increasing minimum pressure has little effect
     #facet grid display of results
-ggplot(data_Fx_mN, aes(x=minPress, y=mean, group=Frequency, color=Frequency))+facet_grid(flowSpeed~`Foil Color`)+geom_point(size=3)+geom_smooth(method=lm, se=FALSE)+theme_bw(base_size=18)+xlab("minPress")+ylab("Net Thrust (mN)")
 
-ggplot(data_Fx_mN, aes(x=minPress, y=mean))+geom_boxplot()+theme_bw(base_size=18)+xlab("Minimum Pressure (kPa)")+ylab("Net Thrust (mN)")
-
-ggplot(data_Fx_mN, aes(x=minPress, y=mean))+geom_boxplot()+facet_wrap(~flowSpeed)+theme_bw(base_size=18)+xlab("Minimum Pressure (kPa)")+ylab("Net Thrust (mN)")
 
 #plot for result 4) increasing frequency alone or stiffness alone doesn't matter that much
-ggplot(data_Fx_mN, aes(x=freq, y=mean))+geom_boxplot()+theme_bw(base_size=18)+xlab("Frequency (Hz)")+ylab("Net Thrust (mN)")
+
 
 ggplot(data_Fx_mN, aes(x=`Foil Color`, y=mean))+geom_boxplot()+theme_bw(base_size=18)+xlab("Stiffness (Foil Color)")+ylab("Net Thrust (mN)")
 
